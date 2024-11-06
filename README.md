@@ -1,6 +1,7 @@
 # CosyVoice_timbre_save
+## Updates
 - added timbre save feature
-
+- borrowed feature related code from [v3ucn](https://github.com/v3ucn/CosyVoice_For_Windows)
 # CosyVoice
 ## 👉🏻 [CosyVoice Demos](https://fun-audio-llm.github.io/) 👈🏻
 [[CosyVoice Paper](https://fun-audio-llm.github.io/pdf/CosyVoice_v1.pdf)][[CosyVoice Studio](https://www.modelscope.cn/studios/iic/CosyVoice-300M)][[CosyVoice Code](https://github.com/FunAudioLLM/CosyVoice)]
