@@ -25,7 +25,7 @@ sys.path.append('{}/third_party/Matcha-TTS'.format(ROOT_DIR))
 from cosyvoice.cli.cosyvoice import CosyVoice
 from cosyvoice.utils.file_utils import load_wav, logging
 from cosyvoice.utils.common import set_all_random_seed
-
+import shutil
 inference_mode_list = ['预训练音色', '3s极速复刻', '跨语种复刻', '自然语言控制']
 instruct_dict = {'预训练音色': '1. 选择预训练音色\n2. 点击生成音频按钮',
                  '3s极速复刻': '1. 选择prompt音频文件，或录入prompt音频，注意不超过30s，若同时提供，优先选择prompt音频文件\n2. 输入prompt文本\n3. 点击生成音频按钮',
@@ -34,6 +34,52 @@ instruct_dict = {'预训练音色': '1. 选择预训练音色\n2. 点击生成�
 stream_mode_list = [('否', False), ('是', True)]
 max_val = 0.8
 
+reference_wavs = ["请选择参考音频或者自己上传"]
+for name in os.listdir(f"{ROOT_DIR}/references/"):
+    reference_wavs.append(name)
+
+spk_new = ["无"]
+
+for name in os.listdir(f"{ROOT_DIR}/voices/"):
+    # print(name.replace(".pt",""))
+    spk_new.append(name.replace(".pt",""))
+
+
+def refresh_choices():
+
+    spk_new = ["无"]
+
+    for name in os.listdir(f"{ROOT_DIR}/voices/"):
+        # print(name.replace(".pt",""))
+        spk_new.append(name.replace(".pt",""))
+    
+    return {"choices":spk_new, "__type__": "update"}
+
+def change_choices():
+
+    reference_wavs = ["选择参考音频,或者自己上传"]
+
+    for name in os.listdir(f"{ROOT_DIR}/references/"):
+        reference_wavs.append(name)
+    
+    return {"choices":reference_wavs, "__type__": "update"}
+
+
+def change_wav(audio_path):
+
+    text = audio_path.replace(".wav","").replace(".mp3","").replace(".WAV","")
+
+    return f"{ROOT_DIR}/references/{audio_path}",text
+
+
+def save_name(name):
+
+    if not name or name == "":
+        gr.Info("音色名称不能为空")
+        return False
+
+    shutil.copyfile(f"{ROOT_DIR}/output.pt",f"{ROOT_DIR}/voices/{name}.pt")
+    gr.Info("音色保存成功,存放位置为voices目录")
 
 def generate_seed():
     seed = random.randint(1, 100000000)
@@ -60,7 +106,7 @@ def change_instruction(mode_checkbox_group):
 
 
 def generate_audio(tts_text, mode_checkbox_group, sft_dropdown, prompt_text, prompt_wav_upload, prompt_wav_record, instruct_text,
-                   seed, stream, speed):
+                   seed, stream, speed,new_dropdown):
     if prompt_wav_upload is not None:
         prompt_wav = prompt_wav_upload
     elif prompt_wav_record is not None:
@@ -111,7 +157,7 @@ def generate_audio(tts_text, mode_checkbox_group, sft_dropdown, prompt_text, pro
     if mode_checkbox_group == '预训练音色':
         logging.info('get sft inference request')
         set_all_random_seed(seed)
-        for i in cosyvoice.inference_sft(tts_text, sft_dropdown, stream=stream, speed=speed):
+        for i in cosyvoice.inference_sft(tts_text, sft_dropdown, stream=stream, speed=speed,new_dropdown=new_dropdown):
             yield (target_sr, i['tts_speech'].numpy().flatten())
     elif mode_checkbox_group == '3s极速复刻':
         logging.info('get zero_shot inference request')
@@ -128,7 +174,7 @@ def generate_audio(tts_text, mode_checkbox_group, sft_dropdown, prompt_text, pro
     else:
         logging.info('get instruct inference request')
         set_all_random_seed(seed)
-        for i in cosyvoice.inference_instruct(tts_text, sft_dropdown, instruct_text, stream=stream, speed=speed):
+        for i in cosyvoice.inference_instruct(tts_text, sft_dropdown, instruct_text, stream=stream, speed=speed,new_dropdown=new_dropdown):
             yield (target_sr, i['tts_speech'].numpy().flatten())
 
 
@@ -144,7 +190,11 @@ def main():
         with gr.Row():
             mode_checkbox_group = gr.Radio(choices=inference_mode_list, label='选择推理模式', value=inference_mode_list[0])
             instruction_text = gr.Text(label="操作步骤", value=instruct_dict[inference_mode_list[0]], scale=0.5)
+            #debug start
             sft_dropdown = gr.Dropdown(choices=sft_spk, label='选择预训练音色', value=sft_spk[0], scale=0.25)
+            new_dropdown = gr.Dropdown(choices=spk_new, label='选择新增音色', value=spk_new[0],interactive=True)
+            refresh_new_button = gr.Button("刷新新增音色")
+            refresh_new_button.click(fn=refresh_choices, inputs=[], outputs=[new_dropdown])
             stream = gr.Radio(choices=stream_mode_list, label='是否流式推理', value=stream_mode_list[0][1])
             speed = gr.Number(value=1, label="速度调节(仅支持非流式推理)", minimum=0.5, maximum=2.0, step=0.1)
             with gr.Column(scale=0.25):
@@ -152,11 +202,24 @@ def main():
                 seed = gr.Number(value=0, label="随机推理种子")
 
         with gr.Row():
+            #debug start
+            wavs_dropdown = gr.Dropdown(label="参考音频列表",choices=reference_wavs,value="请选择参考音频或者自己上传",interactive=True)
+            refresh_button = gr.Button("刷新参考音频")
+            refresh_button.click(fn=change_choices, inputs=[], outputs=[wavs_dropdown])
+            #debug end
             prompt_wav_upload = gr.Audio(sources='upload', type='filepath', label='选择prompt音频文件，注意采样率不低于16khz')
             prompt_wav_record = gr.Audio(sources='microphone', type='filepath', label='录制prompt音频文件')
         prompt_text = gr.Textbox(label="输入prompt文本", lines=1, placeholder="请输入prompt文本，需与prompt音频内容一致，暂时不支持自动识别...", value='')
         instruct_text = gr.Textbox(label="输入instruct文本", lines=1, placeholder="请输入instruct文本.", value='')
+        #debug start
+        new_name = gr.Textbox(label="输入新的音色名称", lines=1, placeholder="输入新的音色名称.", value='')
 
+        save_button = gr.Button("保存音色")
+
+        save_button.click(save_name, inputs=[new_name])
+
+        wavs_dropdown.change(change_wav,[wavs_dropdown],[prompt_wav_upload,prompt_text])
+        #debug end
         generate_button = gr.Button("生成音频")
 
         audio_output = gr.Audio(label="合成音频", autoplay=True, streaming=True)
@@ -164,7 +227,7 @@ def main():
         seed_button.click(generate_seed, inputs=[], outputs=seed)
         generate_button.click(generate_audio,
                               inputs=[tts_text, mode_checkbox_group, sft_dropdown, prompt_text, prompt_wav_upload, prompt_wav_record, instruct_text,
-                                      seed, stream, speed],
+                                      seed, stream, speed,new_dropdown],
                               outputs=[audio_output])
         mode_checkbox_group.change(fn=change_instruction, inputs=[mode_checkbox_group], outputs=[instruction_text])
     demo.queue(max_size=4, default_concurrency_limit=2)

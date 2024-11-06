@@ -175,6 +175,21 @@ class CosyVoiceFrontEnd:
         model_input['prompt_text_len'] = instruct_text_token_len
         return model_input
 
+    def frontend_instruct_saved(self, tts_text, spk_id, instruct_text,newspk):
+        model_input = newspk
+        # in instruct mode, we remove spk_embedding in llm due to information leakage
+        del model_input['llm_embedding']
+        del model_input["prompt_speech_feat_len"]
+        del model_input["prompt_speech_feat"]
+        #del model_input["prompt_text"]
+        #del model_input["prompt_text_len"]
+        instruct_text_token, instruct_text_token_len = self._extract_text_token(instruct_text + '<endofprompt>')
+        model_input['prompt_text'] = instruct_text_token
+        model_input['prompt_text_len'] = instruct_text_token_len
+        return model_input
+
+
+
     def frontend_vc(self, source_speech_16k, prompt_speech_16k):
         prompt_speech_token, prompt_speech_token_len = self._extract_speech_token(prompt_speech_16k)
         prompt_speech_22050 = torchaudio.transforms.Resample(orig_freq=16000, new_freq=22050)(prompt_speech_16k)
