@@ -32,6 +32,11 @@ except ImportError:
     use_ttsfrd = False
 from cosyvoice.utils.frontend_utils import contains_chinese, replace_blank, replace_corner_mark, remove_bracket, spell_out_number, split_paragraph
 
+#[Wenn] Static paths
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir))
+grandparent_dir = os.path.dirname(parent_dir)
 
 class CosyVoiceFrontEnd:
 
@@ -141,6 +146,28 @@ class CosyVoiceFrontEnd:
         embedding = self.spk2info[spk_id]['embedding']
         model_input = {'text': tts_text_token, 'text_len': tts_text_token_len, 'llm_embedding': embedding, 'flow_embedding': embedding}
         return model_input
+    
+    #[wenn]added func for audio timbre saving
+    def frontend_sft_saved(self, tts_text, spk_id, new_dropdown):
+        tts_text_token, tts_text_token_len = self._extract_text_token(tts_text)
+        embedding = self.spk2info[spk_id]['embedding']
+        model_input = {'text': tts_text_token, 'text_len': tts_text_token_len, 'llm_embedding': embedding, 'flow_embedding': embedding}
+        newspk = torch.load(f'{grandparent_dir}/voices/{new_dropdown}.pt')
+        
+        model_input["flow_embedding"] = newspk["flow_embedding"] 
+        model_input["llm_embedding"] = newspk["llm_embedding"]
+
+        model_input["llm_prompt_speech_token"] = newspk["llm_prompt_speech_token"]
+        model_input["llm_prompt_speech_token_len"] = newspk["llm_prompt_speech_token_len"]
+
+        model_input["flow_prompt_speech_token"] = newspk["flow_prompt_speech_token"]
+        model_input["flow_prompt_speech_token_len"] = newspk["flow_prompt_speech_token_len"]
+
+        model_input["prompt_speech_feat_len"] = newspk["prompt_speech_feat_len"]
+        model_input["prompt_speech_feat"] = newspk["prompt_speech_feat"]
+        model_input["prompt_text"] = newspk["prompt_text"]
+        model_input["prompt_text_len"] = newspk["prompt_text_len"]
+        return model_input
 
     def frontend_zero_shot(self, tts_text, prompt_text, prompt_speech_16k):
         tts_text_token, tts_text_token_len = self._extract_text_token(tts_text)
@@ -174,15 +201,21 @@ class CosyVoiceFrontEnd:
         model_input['prompt_text'] = instruct_text_token
         model_input['prompt_text_len'] = instruct_text_token_len
         return model_input
-
-    def frontend_instruct_saved(self, tts_text, spk_id, instruct_text,newspk):
-        model_input = newspk
+        
+        #[wenn]added func for audio timbre saving
+    def frontend_instruct_saved(self, tts_text, spk_id, instruct_text, new_dropdown):
+        model_input = self.frontend_sft_saved(tts_text, spk_id, new_dropdown)
         # in instruct mode, we remove spk_embedding in llm due to information leakage
         del model_input['llm_embedding']
+
+        del model_input["llm_prompt_speech_token"]
+        del model_input["llm_prompt_speech_token_len"]
+        del model_input["flow_prompt_speech_token"]
+        del model_input["flow_prompt_speech_token_len"]
+        
         del model_input["prompt_speech_feat_len"]
         del model_input["prompt_speech_feat"]
-        #del model_input["prompt_text"]
-        #del model_input["prompt_text_len"]
+
         instruct_text_token, instruct_text_token_len = self._extract_text_token(instruct_text + '<endofprompt>')
         model_input['prompt_text'] = instruct_text_token
         model_input['prompt_text_len'] = instruct_text_token_len
